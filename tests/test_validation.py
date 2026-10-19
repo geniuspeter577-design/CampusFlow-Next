@@ -148,3 +148,29 @@ class TestSafeLoad(unittest.TestCase):
 
 if __name__ == "__main__":
     unittest.main()
+
+
+class TestAffectedUsersEdgeCases(unittest.TestCase):
+    def test_zero_affected_users_rejected(self):
+        bad = good()
+        bad["affected_users"] = 0
+        with self.assertRaises(ValueError):
+            validate_ticket_collection([bad])
+
+    def test_negative_affected_users_rejected(self):
+        bad = good()
+        bad["affected_users"] = -1
+        with self.assertRaises(ValueError):
+            validate_ticket_collection([bad])
+
+    def test_float_affected_users_rejected(self):
+        bad = good()
+        bad["affected_users"] = 2.5
+        with self.assertRaises(ValueError):
+            validate_ticket_collection([bad])
+
+    def test_string_affected_users_rejected(self):
+        bad = good()
+        bad["affected_users"] = "12"
+        with self.assertRaises(ValueError):
+            validate_ticket_collection([bad])
