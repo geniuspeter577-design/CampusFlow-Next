@@ -3,6 +3,8 @@
 
 import copy
 import json
+import os
+import tempfile
 from pathlib import Path
 
 from campusflow.tickets import (
@@ -111,6 +113,11 @@ def _validate_ticket_collection(tickets):
         ):
             raise ValueError(f"{location} has an invalid assignee.")
 
+        if status == "in_progress" and assignee is None:
+            raise ValueError(
+                f"{location} cannot be in progress without an assignee."
+            )
+
         # Older tickets may not have notes. Add the field to the copy only.
         notes = ticket.get("notes", [])
         if not isinstance(notes, list):
@@ -196,18 +203,40 @@ def load_tickets(path="tickets.json"):
 
 
 def save_tickets(tickets, path="tickets.json"):
-    """Validate tickets before saving them as readable JSON."""
+    """Validate tickets and save safely without damaging an existing file."""
     validated_tickets = _validate_ticket_collection(tickets)
-
     file_path = Path(path)
-    with file_path.open("w", encoding="utf-8") as file:
-        json.dump(
-            validated_tickets,
-            file,
-            indent=2,
-            ensure_ascii=False,
-        )
-        file.write("\n")
+    temp_path = None
+
+    try:
+        # Keep the temporary file in the same directory so replacement
+        # happens on the same filesystem.
+        with tempfile.NamedTemporaryFile(
+            mode="w",
+            encoding="utf-8",
+            dir=file_path.parent,
+            prefix=f".{file_path.name}.",
+            suffix=".tmp",
+            delete=False,
+        ) as file:
+            temp_path = Path(file.name)
+            json.dump(
+                validated_tickets,
+                file,
+                indent=2,
+                ensure_ascii=False,
+            )
+            file.write("\n")
+            file.flush()
+            os.fsync(file.fileno())
+
+        # Replace the destination only after the new file is complete.
+        os.replace(temp_path, file_path)
+        temp_path = None
+    finally:
+        # Clean up an incomplete temporary file after any failure.
+        if temp_path is not None:
+            temp_path.unlink(missing_ok=True)
 
 
 def load_validated_tickets(path="tickets.json"):
