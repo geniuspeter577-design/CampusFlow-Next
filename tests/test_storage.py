@@ -1,6 +1,7 @@
 import json
 import tempfile
 import unittest
+from unittest.mock import patch
 from pathlib import Path
 
 from campusflow.storage import load_tickets, save_tickets
@@ -155,6 +156,24 @@ class TestStorage(unittest.TestCase):
                 loaded_tickets[0]["notes"], tickets[0]["notes"]
             )
 
+
+    def test_write_failure_preserves_existing_file(self):
+        with tempfile.TemporaryDirectory() as directory:
+            path = Path(directory) / "tickets.json"
+            original_content = '[{"original": true}]'
+            path.write_text(original_content, encoding="utf-8")
+
+            with patch(
+                "campusflow.storage.json.dump",
+                side_effect=OSError("simulated disk failure"),
+            ):
+                with self.assertRaises(OSError):
+                    save_tickets([make_ticket()], path)
+
+            self.assertEqual(
+                path.read_text(encoding="utf-8"),
+                original_content,
+            )
 
 if __name__ == "__main__":
     unittest.main()
